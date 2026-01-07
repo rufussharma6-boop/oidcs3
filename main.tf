@@ -25,7 +25,6 @@ resource "aws_s3_bucket_website_configuration" "config" {
 resource "aws_s3_bucket_public_access_block" "public_access" {
   for_each = aws_s3_bucket.web_bucket
   bucket   = each.value.id
-
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
@@ -38,7 +37,6 @@ resource "aws_s3_bucket_policy" "read_policy" {
   bucket   = each.value.id
   
   depends_on = [aws_s3_bucket_public_access_block.public_access]
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -55,7 +53,6 @@ resource "aws_s3_bucket_policy" "read_policy" {
 resource "aws_iam_role" "github_role" {
   for_each = toset(["dev", "prod"])
   name     = "github-deploy-role-${each.key}"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -63,10 +60,13 @@ resource "aws_iam_role" "github_role" {
       Effect = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { 
-          # !!! REPLACE YOUR_USER/YOUR_REPO BELOW !!!
-          "token.actions.githubusercontent.com:sub" = "repo:rufussharma6-boop/oidcs3:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}" 
+        StringEquals = { 
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = { 
+          # !!! REPLACE YOUR_USER/YOUR_REPO WITH YOUR ACTUAL GITHUB USERNAME AND REPO NAME !!!
+          # Example: "repo:prabhat123/my-website:environment:dev"
+          "token.actions.githubusercontent.com:sub" = "repo:YOUR_USER/YOUR_REPO:environment:${each.key == "prod" ? "prod" : "dev"}"
         }
       }
     }]
@@ -76,7 +76,6 @@ resource "aws_iam_role" "github_role" {
 # 5. IAM Policy
 resource "aws_iam_role_policy" "deploy_policy" {
   for_each = aws_iam_role.github_role
-
   name = "S3DeployPolicy"
   role = each.value.id
   policy = jsonencode({
@@ -95,4 +94,15 @@ resource "aws_iam_role_policy" "deploy_policy" {
 # 6. Outputs
 output "role_arns" {
   value = { for k, v in aws_iam_role.github_role : k => v.arn }
+}
+
+output "bucket_names" {
+  value = { for k, v in aws_s3_bucket.web_bucket : k => v.bucket }
+}
+
+output "website_urls" {
+  value = { 
+    for k, v in aws_s3_bucket.web_bucket : 
+    k => "http://${v.bucket}.s3-website-ap-south-1.amazonaws.com"
+  }
 }
