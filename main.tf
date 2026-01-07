@@ -32,12 +32,11 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   restrict_public_buckets = false
 }
 
-# 3. Fixed S3 Bucket Policy
+# 3. S3 Bucket Policy
 resource "aws_s3_bucket_policy" "read_policy" {
   for_each = aws_s3_bucket.web_bucket
   bucket   = each.value.id
   
-  # Wait for the public access block to be removed first
   depends_on = [aws_s3_bucket_public_access_block.public_access]
 
   policy = jsonencode({
@@ -46,13 +45,13 @@ resource "aws_s3_bucket_policy" "read_policy" {
       Sid       = "PublicRead"
       Effect    = "Allow"
       Principal = "*"
-      Action    = "s3:GetObject" # Corrected Action
+      Action    = "s3:GetObject"
       Resource  = "${each.value.arn}/*"
     }]
   })
 }
 
-# 4. Fixed IAM Roles (Note the colon in sts:AssumeRoleWithWebIdentity)
+# 4. IAM Roles
 resource "aws_iam_role" "github_role" {
   for_each = toset(["dev", "prod"])
   name     = "github-deploy-role-${each.key}"
@@ -60,13 +59,13 @@ resource "aws_iam_role" "github_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRoleWithWebIdentity" # Fixed: replaced . with :
+      Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
         StringLike   = { 
-          # REPLACE YOUR_USER/YOUR_REPO with your actual github details
+          # !!! REPLACE YOUR_USER/YOUR_REPO BELOW !!!
           "token.actions.githubusercontent.com:sub" = "repo:YOUR_USER/YOUR_REPO:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}" 
         }
       }
@@ -74,9 +73,9 @@ resource "aws_iam_role" "github_role" {
   })
 }
 
-# 5. Fixed Policy Chaining
+# 5. IAM Policy
 resource "aws_iam_role_policy" "deploy_policy" {
-  for_each = aws_iam_role.github_role # Chained correctly
+  for_each = aws_iam_role.github_role
 
   name = "S3DeployPolicy"
   role = each.value.id
@@ -93,7 +92,7 @@ resource "aws_iam_role_policy" "deploy_policy" {
   })
 }
 
-# Outputs to make your life easier
+# 6. Outputs
 output "role_arns" {
   value = { for k, v in aws_iam_role.github_role : k => v.arn }
 }
