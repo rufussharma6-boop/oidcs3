@@ -66,7 +66,7 @@ resource "aws_iam_role" "github_role" {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
         StringLike   = { 
           # !!! REPLACE YOUR_USER/YOUR_REPO BELOW !!!
-          "token.actions.githubusercontent.com:sub" = "repo:rufussharma6-boop/oids3ref:refs/heads/${each.key == "prod" ? "main" : "dev"}" 
+          "token.actions.githubusercontent.com:sub" = "repo:rufussharma6-boop/oidcs3:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}" 
         }
       }
     }]
