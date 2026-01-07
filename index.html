@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Managed Website</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        .env-badge { padding: 10px 20px; border-radius: 5px; color: white; font-weight: bold; }
+        .prod { background: #2ecc71; }
+        .dev { background: #e67e22; }
+    </style>
+</head>
+<body>
+    <h1>Welcome to Prabhat's Site</h1>
+    <p>This site is deployed automatically via GitHub OIDC.</p>
+    <div id="status">Checking environment...</div>
+
+    <script>
+        const host = window.location.hostname;
+        const statusDiv = document.getElementById('status');
+        if (host.includes('prod')) {
+            statusDiv.innerHTML = '<span class="env-badge prod">PRODUCTION</span>';
+        } else {
+            statusDiv.innerHTML = '<span class="env-badge dev">DEVELOPMENT</span>';
+        }
+    </script>
+</body>
+</html>
