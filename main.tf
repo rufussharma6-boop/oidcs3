@@ -1,69 +1,85 @@
 provider "aws" {
-  region = "ap-south-1"
+  region = "ap-south-1" 
 }
 
+# 1. OIDC Provider
 resource "aws_iam_openid_connect_provider" "github" {
-  url = "http://token.actions.githubusercontent.com"
-  client_id_list = ["sts.amazonaws.com"]
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
+# 2. S3 Buckets
 resource "aws_s3_bucket" "web_bucket" {
-  for_each = toset(["dev", "prod"])
-  bucket = "prabhats3bucket${each.key}"
+  for_each      = toset(["dev", "prod"])
+  bucket        = "prabhats3bucket${each.key}"
   force_destroy = true
+}
+
+resource "aws_s3_bucket_website_configuration" "config" {
+  for_each = aws_s3_bucket.web_bucket
+  bucket   = each.value.id
+  index_document { suffix = "index.html" }
 }
 
 resource "aws_s3_bucket_public_access_block" "public_access" {
   for_each = aws_s3_bucket.web_bucket
-  bucket = each.value.id
+  bucket   = each.value.id
 
-  block_public_acls = false
-  block_public_policy = false
-  ignore_public_acls = false
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
+# 3. Fixed S3 Bucket Policy
 resource "aws_s3_bucket_policy" "read_policy" {
   for_each = aws_s3_bucket.web_bucket
-  bucket = each.value.id
+  bucket   = each.value.id
+  
+  # Wait for the public access block to be removed first
+  depends_on = [aws_s3_bucket_public_access_block.public_access]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid = "PublicRead"
-      Effect = "Allow"
+      Sid       = "PublicRead"
+      Effect    = "Allow"
       Principal = "*"
-      Action = "s3.GetObject"
-      Resource = "${each.value.arn}/*"
+      Action    = "s3:GetObject" # Corrected Action
+      Resource  = "${each.value.arn}/*"
     }]
   })
 }
 
+# 4. Fixed IAM Roles (Note the colon in sts:AssumeRoleWithWebIdentity)
 resource "aws_iam_role" "github_role" {
   for_each = toset(["dev", "prod"])
-  name = "github-deploy-role-${each.key}"
+  name     = "github-deploy-role-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts.AssumeRoleWithWebIdentity"
+      Action = "sts:AssumeRoleWithWebIdentity" # Fixed: replaced . with :
       Effect = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
         StringLike   = { 
-          # PROD only works from 'main' branch, DEV from 'dev' branch
-          "token.actions.githubusercontent.com:sub" = "repo:rufussharma6-boop/oidcs3:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}"
-          }
+          # REPLACE YOUR_USER/YOUR_REPO with your actual github details
+          "token.actions.githubusercontent.com:sub" = "repo:YOUR_USER/YOUR_REPO:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}" 
         }
-      }]
-    })
-  }
+      }
+    }]
+  })
+}
 
-  resource "aws_iam_role_policy" "deploy_policy" {
-  for_each = aws_iam_role
-  name     = "S3DeployPolicy"
-  role     = each.value.id
+# 5. Fixed Policy Chaining
+resource "aws_iam_role_policy" "deploy_policy" {
+  for_each = aws_iam_role.github_role # Chained correctly
+
+  name = "S3DeployPolicy"
+  role = each.value.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -75,4 +91,9 @@ resource "aws_iam_role" "github_role" {
       ]
     }]
   })
+}
+
+# Outputs to make your life easier
+output "role_arns" {
+  value = { for k, v in aws_iam_role.github_role : k => v.arn }
 }
