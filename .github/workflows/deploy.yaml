@@ -1,17 +1,20 @@
 name: Deploy Website
-on: 
-  push: 
-    branches: [ main, dev]
-permissions: 
-id-token: write
-contents: read
 
-jobs: 
+on:
+  push:
+    branches: [ main, dev ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
   deploy:
-    runs on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}  
+    runs-on: ubuntu-latest
+    # Map 'main' branch to 'prod' environment, otherwise 'dev'
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
 
-    steps: 
+    steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
