@@ -2,16 +2,19 @@ name: Deploy Website
 
 on:
   push:
+    # Triggers on pushes to 'main' (Production) and 'dev' (Development)
     branches: [ main, dev ]
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # Required for requesting the JWT from GitHub
+  contents: read    # Required for actions/checkout to read your code
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Map 'main' branch to 'prod' environment, otherwise 'dev'
+    
+    # Maps the 'main' branch to the 'prod' GitHub Environment
+    # Any other branch (like 'dev') maps to the 'dev' GitHub Environment
     environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
 
     steps:
@@ -23,7 +26,15 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
+          role-session-name: GitHubActionsS3Deploy
+          role-duration-seconds: 900 # 15 minute session
 
-      - name: Deploy to S3
+      - name: Deploy index.html to S3
         run: |
+          # This syncs only your index.html and deletes anything else in the bucket
           aws s3 sync . s3://${{ secrets.BUCKET_NAME }} --exclude "*" --include "index.html" --delete
+
+      - name: Print Website URL
+        run: |
+          echo "Deployment successful!"
+          echo "URL: http://${{ secrets.BUCKET_NAME }}.s3-website-ap-south-1.amazonaws.com"
