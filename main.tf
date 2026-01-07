@@ -49,7 +49,7 @@ resource "aws_s3_bucket_policy" "read_policy" {
   })
 }
 
-# 4. IAM Roles
+# 4. IAM Roles - BRANCH BASED
 resource "aws_iam_role" "github_role" {
   for_each = toset(["dev", "prod"])
   name     = "github-deploy-role-${each.key}"
@@ -64,9 +64,7 @@ resource "aws_iam_role" "github_role" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = { 
-          # !!! REPLACE YOUR_USER/YOUR_REPO WITH YOUR ACTUAL GITHUB USERNAME AND REPO NAME !!!
-          # Example: "repo:prabhat123/my-website:environment:dev"
-          "token.actions.githubusercontent.com:sub" = "repo:YOUR_USER/YOUR_REPO:environment:${each.key == "prod" ? "prod" : "dev"}"
+          "token.actions.githubusercontent.com:sub" = "repo:rufussharma6-boop/oidcs3:ref:refs/heads/${each.key == "prod" ? "main" : "dev"}"
         }
       }
     }]
